@@ -128,19 +128,26 @@ section.card h3{font-family:var(--cond);font-size:21px;margin:0 0 12px}
 .paper .sign div{border-top:1px solid #000;padding-top:4px;min-width:220px;font-size:13px}
 #report{display:none}
 @media print{
-  @page{size:A4 landscape;margin:12mm}
-  body{background:#fff;color:#000;font-size:11pt}
+  @page{margin:12mm}
+  html,body{background:#fff!important;color:#000}
+  body{font-size:11pt}
   :root{padding:0}
-  #app,.fabbar,.toast{display:none!important}
-  #report{display:block}
-  #report h1{font-family:var(--cond);font-size:20pt;margin:0 0 2mm}
-  #report .sub{margin:0 0 5mm;color:#333}
-  #report table{width:100%;border-collapse:collapse;font-size:10pt}
-  #report th,#report td{border:1px solid #888;padding:2mm 2.2mm;text-align:left;vertical-align:top}
-  #report th{background:#eee;font-family:var(--cond);font-size:10.5pt}
-  #report .dot{width:10px;height:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  #report .sign{margin-top:12mm;display:flex;gap:30mm}
-  #report .sign div{border-top:1px solid #000;padding-top:1.5mm;min-width:70mm;font-size:9.5pt}
+  header.top,.fabbar,.toast,.back,.hint,.noprint,#report{display:none!important}
+  main{max-width:none!important;padding:0!important;margin:0!important}
+  .paperwrap{overflow:visible!important;padding:0!important}
+  .paper{min-width:0!important;width:100%;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:#fff!important;color:#000!important}
+  .paper h1{font-family:var(--cond);font-size:20pt;margin:0 0 2mm}
+  .paper .sub{margin:0 0 5mm;color:#333}
+  .paper table{width:100%;border-collapse:collapse;font-size:9pt}
+  .paper th,.paper td{border:1px solid #888;padding:1.6mm 1.8mm;text-align:left;vertical-align:top}
+  .paper th{background:#eee!important;font-family:var(--cond);font-size:9.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .paper thead{display:table-header-group}
+  .paper .rep-head{display:block!important;overflow:hidden}
+  .paper .rep-head>div{float:left}
+  .paper .rep-logo{float:right;margin-left:8mm;height:13mm;width:52mm}
+  .paper .dot{width:10px;height:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .paper .sign{margin-top:12mm;display:block!important}
+  .paper .sign div{display:inline-block;border-top:1px solid #000;padding-top:1.5mm;min-width:70mm;margin-right:25mm;font-size:9.5pt}
 }
 </style>
 </head>
@@ -479,13 +486,13 @@ function renderReport(){document.getElementById('report').innerHTML=reportHTML()
 function previewView(){
   return header()+`<main style="max-width:1100px">
     <button class="back" data-act="back">‹ Zur Übersicht</button>
-    <p class="hint" style="margin:0 0 10px">So sieht der Ausdruck aus (A4 quer). Auf dem Handy seitlich wischen.</p>
+    <div class="actions noprint" style="display:flex;gap:10px;margin:6px 0 12px">
+      <button class="btn ghost" data-act="back" style="flex:1">Zurück</button>
+      <button class="btn" data-act="printnow" style="flex:1">Jetzt drucken</button>
+    </div>
+    <p class="hint" style="margin:0 0 10px">So sieht der Ausdruck aus (A4 quer). Auf dem Handy seitlich wischen. Beim Drucken am iPhone unter „Ausrichtung“ auf Querformat stellen.</p>
     <div class="paperwrap"><div class="paper">${reportHTML()}</div></div>
-  </main>
-  <div class="fabbar"><div class="inner">
-    <button class="btn ghost" data-act="back">Zurück</button>
-    <button class="btn" data-act="printnow">Jetzt drucken</button>
-  </div></div>`;
+  </main>`;
 }
 
 /* Fotos verkleinern */
@@ -600,7 +607,11 @@ document.addEventListener('change',async e=>{
   }
 });
 
-window.addEventListener('beforeprint',renderReport);
+const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+window.addEventListener('beforeprint',()=>{
+  renderReport();
+  if(!isIOS&&!document.getElementById('pagesize')){const st=document.createElement('style');st.id='pagesize';st.textContent='@page{size:A4 landscape;margin:12mm}';document.head.appendChild(st)}
+});
 window.addEventListener('afterprint',()=>{if(pendingBackup){pendingBackup=false;try{doExport()}catch(e){}}});
 
 render();
