@@ -181,12 +181,25 @@ function save(){
   catch(e){toast('Speicher voll – bitte ein paar Fotos entfernen.');return false}
 }
 function lastBackup(){try{return localStorage.getItem(KEY+'-lastbackup')||''}catch(e){return ''}}
-function doExport(){
+function isStandalone(){return navigator.standalone===true||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)}
+async function doExport(){
   const d=new Date();const stamp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const fname='fuhrpark-check-sicherung-'+stamp+'.json';
   const blob=new Blob([JSON.stringify({app:'fuhrpark-check',version:1,exported:d.toISOString(),data},null,1)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);const l=document.createElement('a');l.href=url;l.download='fuhrpark-check-sicherung-'+stamp+'.json';
-  document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+  let shared=false;
+  if(isStandalone()&&navigator.canShare&&navigator.share){
+    const f=new File([blob],fname,{type:'application/json'});
+    if(navigator.canShare({files:[f]})){
+      try{await navigator.share({files:[f],title:'Fuhrpark-Check Sicherung'});shared=true}
+      catch(e){if(e&&e.name==='AbortError')return false}
+    }
+  }
+  if(!shared){
+    const url=URL.createObjectURL(blob);const l=document.createElement('a');l.href=url;l.download=fname;
+    document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }
   try{localStorage.setItem(KEY+'-lastbackup',d.toISOString())}catch(e){}
+  return true;
 }
 function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),2200)}
 
@@ -482,6 +495,137 @@ function backupView(){
   </main>`;
 }
 
+/* PDF fürs Drucken im Home-Bildschirm-Modus */
+function reportRows(){
+  const box=document.createElement('div');
+  box.innerHTML=reportHTML().replace(/<br\s*\/?>/gi,'\n');
+  const head=[...box.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+  const rows=[...box.querySelectorAll('tbody tr')].map(tr=>[...tr.children].map((td,i)=>{
+    const dot=td.querySelector('i.dot');
+    const col=dot?(dot.classList.contains('red')?'red':dot.classList.contains('amber')?'amber':'green'):'';
+    if(dot)dot.remove();
+    return {t:td.textContent.replace(/[ \t]+\n/g,'\n').trim(),col,bold:i===0};
+  }));
+  return {head,rows,title:box.querySelector('h1').textContent,sub:box.querySelector('.sub').textContent};
+}
+function loadImg(src){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=src})}
+async function buildPdf(){
+  const R=reportRows();
+  const S=6,W=297*S,H=210*S,M=12*S;
+  const cols=[30,22,18,32,20,26,30,24,18,53].map(x=>x*S);
+  const FS=Math.round(3.1*S),LH=FS*1.32,PX=1.8*S,PY=1.6*S,LW=Math.max(2,S/3);
+  const FONT='"Helvetica Neue",Helvetica,Arial,sans-serif';
+  const COL={green:'#2E8B57',amber:'#D99A00',red:'#C8312B'};
+  const canvases=[];let cv,ctx,y;
+  const newPage=()=>{cv=document.createElement('canvas');cv.width=W;cv.height=H;ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.textBaseline='top';canvases.push(cv);y=M};
+  function wrap(text,maxW,boldFirst,fs){
+    const out=[];
+    text.split('\n').forEach((para,pi)=>{
+      const bold=boldFirst&&pi===0;ctx.font=(bold?'bold ':'')+fs+'px '+FONT;
+      let line='';
+      const push=()=>{out.push({s:line,b:bold});line=''};
+      para.split(' ').forEach(word=>{
+        const test=line?line+' '+word:word;
+        if(ctx.measureText(test).width<=maxW){line=test;return}
+        if(line)push();
+        if(ctx.measureText(word).width<=maxW){line=word;return}
+        for(const ch of word){if(ctx.measureText(line+ch).width>maxW&&line)push();line+=ch}
+      });
+      push();
+    });
+    return out;
+  }
+  function tableHeader(){
+    const hfs=Math.round(FS*0.95);
+    const cells=R.head.map((h,i)=>wrap(h,cols[i]-2*PX,true,hfs));
+    const h=Math.max(...cells.map(c=>c.length))*hfs*1.3+2*PY;
+    let x=M;
+    cells.forEach((lines,i)=>{
+      ctx.fillStyle='#eee';ctx.fillRect(x,y,cols[i],h);
+      ctx.strokeStyle='#888';ctx.lineWidth=LW;ctx.strokeRect(x,y,cols[i],h);
+      ctx.fillStyle='#000';ctx.font='bold '+hfs+'px '+FONT;
+      lines.forEach((l,k)=>ctx.fillText(l.s,x+PX,y+PY+k*hfs*1.3));
+      x+=cols[i];
+    });
+    y+=h;
+  }
+  newPage();
+  // Kopf mit Titel und Logo
+  ctx.fillStyle='#000';ctx.font='bold '+Math.round(7.2*S)+'px '+FONT;ctx.fillText(R.title,M,y);
+  ctx.fillStyle='#333';ctx.font=Math.round(3.4*S)+'px '+FONT;ctx.fillText(R.sub,M,y+9.5*S);
+  try{
+    const css='.lb{fill:#1D4F91}.lt{fill:#7A98C6}.lw{fill:none;stroke:#fff;stroke-width:10;stroke-linejoin:miter}.ls{fill:none;stroke:#1D4F91;stroke-width:8;stroke-linejoin:miter}';
+    const svg=LOGO_SVG.replace('<svg ','<svg width="322" height="80" ').replace('>','><style>'+css+'</style>');
+    const im=await loadImg('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg));
+    ctx.drawImage(im,W-M-52*S,y,52*S,13*S);
+  }catch(e){}
+  y+=17*S;
+  tableHeader();
+  R.rows.forEach(row=>{
+    const cells=row.map((c,i)=>wrap(c.t,cols[i]-2*PX-(c.col?FS*1.1:0),c.bold,FS));
+    const h=Math.max(...cells.map(c=>c.length))*LH+2*PY;
+    if(y+h>H-M-4*S){newPage();tableHeader()}
+    let x=M;
+    cells.forEach((lines,i)=>{
+      ctx.strokeStyle='#888';ctx.lineWidth=LW;ctx.strokeRect(x,y,cols[i],h);
+      const c=row[i];let tx=x+PX;
+      if(c.col){ctx.fillStyle=COL[c.col];ctx.beginPath();ctx.arc(x+PX+FS*0.4,y+PY+FS*0.62,FS*0.36,0,7);ctx.fill();tx+=FS*1.1}
+      ctx.fillStyle='#000';
+      lines.forEach((l,k)=>{ctx.font=(l.b?'bold ':'')+FS+'px '+FONT;ctx.fillText(l.s,tx,y+PY+k*LH)});
+      x+=cols[i];
+    });
+    y+=h;
+  });
+  if(y+26*S>H-M){newPage()}
+  y+=14*S;
+  ctx.strokeStyle='#000';ctx.lineWidth=LW;ctx.fillStyle='#000';ctx.font=Math.round(3.3*S)+'px '+FONT;
+  [['Geprüft von (Datum, Unterschrift)',M],['Gesehen (Datum, Unterschrift)',M+95*S]].forEach(([t,x])=>{
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+75*S,y);ctx.stroke();ctx.fillText(t,x,y+2*S)});
+  canvases.forEach((c,i)=>{const g=c.getContext('2d');g.fillStyle='#555';g.font=Math.round(2.8*S)+'px '+FONT;g.textBaseline='top';g.textAlign='right';g.fillText('Seite '+(i+1)+' von '+canvases.length,W-M,H-M+3*S)});
+  const jpegs=[];
+  for(const c of canvases){
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.92));
+    jpegs.push({data:new Uint8Array(await blob.arrayBuffer()),w:c.width,h:c.height});
+  }
+  return makePdf(jpegs);
+}
+function makePdf(jpegs){
+  const enc=new TextEncoder();const parts=[];let len=0;const offs=[];
+  const push=b=>{const u=typeof b==='string'?enc.encode(b):b;parts.push(u);len+=u.length};
+  const obj=(id,fn)=>{offs[id]=len;push(id+' 0 obj\n');fn();push('\nendobj\n')};
+  const n=jpegs.length;
+  push('%PDF-1.4\n');
+  obj(1,()=>push('<< /Type /Catalog /Pages 2 0 R >>'));
+  obj(2,()=>push('<< /Type /Pages /Kids ['+jpegs.map((_,i)=>(3+3*i)+' 0 R').join(' ')+'] /Count '+n+' >>'));
+  jpegs.forEach((j,i)=>{
+    const pid=3+3*i,cid=4+3*i,iid=5+3*i,cs='q 841.89 0 0 595.28 0 0 cm /Im0 Do Q';
+    obj(pid,()=>push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 841.89 595.28] /Resources << /XObject << /Im0 '+iid+' 0 R >> >> /Contents '+cid+' 0 R >>'));
+    obj(cid,()=>push('<< /Length '+cs.length+' >>\nstream\n'+cs+'\nendstream'));
+    obj(iid,()=>{push('<< /Type /XObject /Subtype /Image /Width '+j.w+' /Height '+j.h+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+j.data.length+' >>\nstream\n');push(j.data);push('\nendstream')});
+  });
+  const xref=len,total=3*n+3;
+  let x='xref\n0 '+total+'\n0000000000 65535 f \n';
+  for(let id=1;id<total;id++)x+=String(offs[id]).padStart(10,'0')+' 00000 n \n';
+  push(x+'trailer\n<< /Size '+total+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF');
+  return new Blob(parts,{type:'application/pdf'});
+}
+async function pdfShare(){
+  toast('PDF wird erstellt …');
+  try{
+    const blob=await buildPdf();
+    const file=new File([blob],'Fuhrpark-Check-'+month+'.pdf',{type:'application/pdf'});
+    if(navigator.canShare&&navigator.share&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'Fuhrpark-Check '+mLabel(month)});
+    }else{
+      const url=URL.createObjectURL(blob);
+      if(!window.open(url,'_blank'))location.href=url;
+    }
+  }catch(err){
+    if(err&&err.name==='AbortError')return;
+    toast('PDF konnte nicht erstellt werden.');
+  }
+}
+
 function renderReport(){document.getElementById('report').innerHTML=reportHTML()}
 function previewView(){
   return header()+`<main style="max-width:1100px">
@@ -490,7 +634,7 @@ function previewView(){
       <button class="btn ghost" data-act="back" style="flex:1">Zurück</button>
       <button class="btn" data-act="printnow" style="flex:1">Jetzt drucken</button>
     </div>
-    <p class="hint" style="margin:0 0 10px">So sieht der Ausdruck aus (A4 quer). Auf dem Handy seitlich wischen. Beim Drucken am iPhone unter „Ausrichtung“ auf Querformat stellen.</p>
+    <p class="hint" style="margin:0 0 10px">${isStandalone()?'So sieht der Ausdruck aus (A4 quer). Tippe auf „Jetzt drucken“ und dann im Menü auf „Drucken“. Das Blatt wird automatisch im Querformat erzeugt.':'So sieht der Ausdruck aus (A4 quer). Auf dem Handy seitlich wischen. Beim Drucken am iPhone unter „Ausrichtung“ auf Querformat stellen.'}</p>
     <div class="paperwrap"><div class="paper">${reportHTML()}</div></div>
   </main>`;
 }
@@ -554,10 +698,10 @@ document.addEventListener('click',async e=>{
   else if(act==='add'){view={name:'vehicle'};render()}
   else if(act==='edit'){view={name:'vehicle',id:view.id};render()}
   else if(act==='backup'){view={name:'backup'};render()}
-  else if(act==='export'){doExport();toast('Sicherung wurde gespeichert');if(view.name==='backup')render()}
+  else if(act==='export'){const ok=await doExport();if(ok!==false){toast('Sicherung wurde gespeichert');if(view.name==='backup')render()}}
   else if(act==='demo'){demo()}
   else if(act==='preview'){view={name:'preview'};render()}
-  else if(act==='printnow'){renderReport();pendingBackup=true;setTimeout(()=>window.print(),250)}
+  else if(act==='printnow'){if(isStandalone()){pdfShare();return}renderReport();pendingBackup=true;setTimeout(()=>window.print(),250)}
   else if(act==='savevehicle'){
     const plateV=document.getElementById('v-plate').value.trim().toUpperCase();
     if(!plateV){toast('Bitte ein Kennzeichen eintragen.');return}
