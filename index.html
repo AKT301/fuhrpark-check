@@ -160,6 +160,7 @@ if(!Array.isArray(data.vehicles)) data.vehicles=[];
 const now=new Date();
 let month=ym(now);
 let view={name:'list'};
+let pendingBackup=false;
 
 function ym(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function addM(m,n){const [y,mo]=m.split('-').map(Number);return ym(new Date(y,mo-1+n,1))}
@@ -549,7 +550,7 @@ document.addEventListener('click',async e=>{
   else if(act==='export'){doExport();toast('Sicherung wurde gespeichert');if(view.name==='backup')render()}
   else if(act==='demo'){demo()}
   else if(act==='preview'){view={name:'preview'};render()}
-  else if(act==='printnow'){renderReport();doExport();window.print()}
+  else if(act==='printnow'){renderReport();pendingBackup=true;setTimeout(()=>window.print(),250)}
   else if(act==='savevehicle'){
     const plateV=document.getElementById('v-plate').value.trim().toUpperCase();
     if(!plateV){toast('Bitte ein Kennzeichen eintragen.');return}
@@ -598,6 +599,9 @@ document.addEventListener('change',async e=>{
     render();
   }
 });
+
+window.addEventListener('beforeprint',renderReport);
+window.addEventListener('afterprint',()=>{if(pendingBackup){pendingBackup=false;try{doExport()}catch(e){}}});
 
 render();
 })();
