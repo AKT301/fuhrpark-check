@@ -104,6 +104,8 @@ section.card h3{font-family:var(--cond);font-size:21px;margin:0 0 12px}
 .photos img{width:92px;height:92px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .photos button{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:0;background:var(--red);color:#fff;cursor:pointer;font-size:14px;line-height:1}
 .hint{font-size:13px;color:var(--muted);margin-top:4px}
+.footlinks{text-align:center;margin:26px 0 0;font-size:13px}
+.footlinks button{background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;padding:8px 10px;font:inherit}
 .actions{display:flex;gap:10px;flex-wrap:wrap}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--asphalt);color:#fff;padding:10px 16px;border-radius:8px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 .toast.show{opacity:1}
@@ -169,6 +171,14 @@ function uid(){return Math.random().toString(36).slice(2,10)}
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify(data));return true}
   catch(e){toast('Speicher voll – bitte ein paar Fotos entfernen.');return false}
+}
+function lastBackup(){try{return localStorage.getItem(KEY+'-lastbackup')||''}catch(e){return ''}}
+function doExport(){
+  const d=new Date();const stamp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const blob=new Blob([JSON.stringify({app:'fuhrpark-check',version:1,exported:d.toISOString(),data},null,1)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);const l=document.createElement('a');l.href=url;l.download='fuhrpark-check-sicherung-'+stamp+'.json';
+  document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+  try{localStorage.setItem(KEY+'-lastbackup',d.toISOString())}catch(e){}
 }
 function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),2200)}
 
@@ -266,6 +276,7 @@ function render(){
   else if(view.name==='detail') app.innerHTML=detailView();
   else if(view.name==='vehicle') app.innerHTML=vehicleForm();
   else if(view.name==='preview') app.innerHTML=previewView();
+  else if(view.name==='backup') app.innerHTML=backupView();
   window.scrollTo(0,0);
 }
 
@@ -305,6 +316,7 @@ function listView(){
         <button class="btn" data-act="add">Fahrzeug anlegen</button>
         <button class="btn ghost" data-act="demo">Beispieldaten laden</button>
       </div></div>`}
+    <div class="footlinks"><button data-act="backup">Datensicherung</button></div>
   </main>
   <div class="fabbar"><div class="inner">
     <button class="btn ghost" data-act="preview"${vs.length?'':' disabled'}>Monatsübersicht</button>
@@ -446,6 +458,22 @@ function reportHTML(){
     <tbody>${rows}</tbody></table>
     <div class="sign"><div>Geprüft von (Datum, Unterschrift)</div><div>Gesehen (Datum, Unterschrift)</div></div>`;
 }
+function backupView(){
+  const n=data.vehicles.length;
+  return header()+`<main>
+    <button class="back" data-act="back">‹ Zurück</button>
+    <section class="card"><h3>Datensicherung</h3>
+      <p class="hint" style="margin:0 0 14px">Die Daten liegen nur in diesem Browser auf diesem Gerät. Mit der Sicherung speicherst du alles (${n} Fahrzeug${n===1?'':'e'}, inklusive Prüfungen und Fotos) in einer Datei. Die kannst du auch auf einem anderen Gerät einspielen.</p>
+      <button class="btn block" data-act="export"${n?'':' disabled'}>Sicherung speichern</button>
+      <p class="hint" style="margin:10px 0 0">${lastBackup()?'Letzte Sicherung: '+dLabel(lastBackup().slice(0,10)):'Noch keine Sicherung gemacht.'} Beim Drucken der Monatsübersicht wird automatisch eine Sicherung gespeichert.</p>
+    </section>
+    <section class="card"><h3>Sicherung einspielen</h3>
+      <p class="hint" style="margin:0 0 14px">Achtung: Die Daten auf diesem Gerät werden dabei durch die Daten aus der Datei ersetzt.</p>
+      <label class="btn ghost block" style="display:block;text-align:center;box-sizing:border-box">Sicherung laden<input type="file" accept=".json,application/json" data-act="import" hidden></label>
+    </section>
+  </main>`;
+}
+
 function renderReport(){document.getElementById('report').innerHTML=reportHTML()}
 function previewView(){
   return header()+`<main style="max-width:1100px">
@@ -517,9 +545,11 @@ document.addEventListener('click',async e=>{
   else if(act==='backdetail'){view={name:'detail',id:view.id};render()}
   else if(act==='add'){view={name:'vehicle'};render()}
   else if(act==='edit'){view={name:'vehicle',id:view.id};render()}
+  else if(act==='backup'){view={name:'backup'};render()}
+  else if(act==='export'){doExport();toast('Sicherung wurde gespeichert');if(view.name==='backup')render()}
   else if(act==='demo'){demo()}
   else if(act==='preview'){view={name:'preview'};render()}
-  else if(act==='printnow'){renderReport();window.print()}
+  else if(act==='printnow'){renderReport();doExport();window.print()}
   else if(act==='savevehicle'){
     const plateV=document.getElementById('v-plate').value.trim().toUpperCase();
     if(!plateV){toast('Bitte ein Kennzeichen eintragen.');return}
@@ -553,6 +583,16 @@ document.addEventListener('input',e=>{
   if(ds.f) draft[ds.f]=e.target.value;
 });
 document.addEventListener('change',async e=>{
+  if(e.target.dataset&&e.target.dataset.act==='import'){
+    const f=e.target.files[0]; if(!f)return;
+    try{
+      const j=JSON.parse(await f.text()); const d=j&&j.data?j.data:j;
+      if(!d||!Array.isArray(d.vehicles)) throw new Error('format');
+      if(!confirm('Sicherung mit '+d.vehicles.length+' Fahrzeug(en) einspielen? Die Daten auf diesem Gerät werden ersetzt.')){e.target.value='';return}
+      data=d; if(save()){view={name:'list'};draft=null;render();toast('Sicherung eingespielt')}
+    }catch(err){toast('Diese Datei ist keine gültige Sicherung.')}
+    e.target.value='';return;
+  }
   if(e.target.dataset&&e.target.dataset.act==='photo'){
     for(const file of e.target.files){try{draft.fotos.push(await shrink(file))}catch(err){toast('Foto konnte nicht gelesen werden.')}}
     render();
