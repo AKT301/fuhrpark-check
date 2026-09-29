@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fuhrpark-Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F0; --surface:#FFFFFF; --ink:#1E2630; --muted:#5E6B78; --line:#D5DBDF;
+  --asphalt:#2B3440; --plate-blue:#1F4E9C;
+  --green:#2E8B57; --amber:#D99A00; --red:#C8312B;
+  --green-soft:#E3F2E9; --amber-soft:#FBF1D6; --red-soft:#F8E1DF;
+  --radius:10px;
+  --sans:"Barlow", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --cond:"Barlow Condensed", "Arial Narrow", "Segoe UI", system-ui, sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161B21; --surface:#1F262E; --ink:#E7ECEF; --muted:#9AA7B3; --line:#333D47;
+    --asphalt:#0F1318;
+    --green-soft:#1C3328; --amber-soft:#3A2F12; --red-soft:#3D1F1D;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161B21; --surface:#1F262E; --ink:#E7ECEF; --muted:#9AA7B3; --line:#333D47;
+  --asphalt:#0F1318;
+  --green-soft:#1C3328; --amber-soft:#3A2F12; --red-soft:#3D1F1D;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--plate-blue);outline-offset:2px}
+
+header.top{background:var(--asphalt);color:#fff;padding:18px 18px 16px}
+.top-inner{max-width:760px;margin:0 auto}
+.top h1{font-family:var(--cond);font-weight:700;font-size:30px;letter-spacing:.01em;margin:0}
+.monthbar{display:flex;align-items:center;gap:8px;margin-top:10px}
+.monthbar button{background:rgba(255,255,255,.12);border:0;color:#fff;width:40px;height:40px;border-radius:8px;font-size:20px;cursor:pointer}
+.monthbar .m{font-family:var(--cond);font-size:22px;font-weight:600;min-width:170px;text-align:center}
+.tally{display:flex;gap:14px;margin-top:12px;font-size:15px;color:#C9D2DA;flex-wrap:wrap}
+.tally span{display:inline-flex;align-items:center;gap:6px}
+
+main{max-width:760px;margin:0 auto;padding:16px 14px 110px}
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;cursor:pointer;text-align:left;width:100%}
+.row:hover{border-color:var(--muted)}
+.row .meta{font-size:14px;color:var(--muted)}
+.row .name{font-weight:600}
+.dot{width:18px;height:18px;border-radius:50%;flex:none;display:inline-block}
+.dot.green{background:var(--green)} .dot.amber{background:var(--amber)} .dot.red{background:var(--red)}
+.dot.sm{width:11px;height:11px}
+
+/* Kennzeichen */
+.plate{display:inline-flex;align-items:stretch;border:2px solid #111;border-radius:5px;background:#fff;color:#111;font-family:var(--cond);font-weight:700;font-size:20px;line-height:1;overflow:hidden;white-space:nowrap}
+.plate .eu{background:var(--plate-blue);color:#fff;font-size:11px;width:16px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px}
+.plate .txt{padding:6px 9px 5px;letter-spacing:.04em}
+.plate.big{font-size:30px}.plate.big .eu{width:22px;font-size:13px}.plate.big .txt{padding:8px 12px 7px}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);padding:28px 20px;text-align:center}
+.empty p{margin:0 0 14px;color:var(--muted)}
+
+.btn{border:0;border-radius:8px;padding:11px 16px;font-weight:600;cursor:pointer;background:var(--asphalt);color:#fff}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--red);border:1px solid var(--red)}
+.btn.block{width:100%}
+.fabbar{position:fixed;left:0;right:0;bottom:0;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--bg) 70%,transparent)}
+.fabbar .inner{max-width:760px;margin:0 auto;display:flex;gap:10px}
+.fabbar .btn{flex:1;padding:14px}
+
+/* Detail */
+.back{background:none;border:0;color:var(--muted);padding:6px 0;cursor:pointer;font-size:16px}
+.dhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:6px 0 4px}
+.dhead h2{font-family:var(--cond);font-size:26px;margin:0}
+.reasons{margin:12px 0 18px;display:flex;flex-direction:column;gap:6px}
+.reason{padding:9px 12px;border-radius:8px;font-size:15px}
+.reason.red{background:var(--red-soft)} .reason.amber{background:var(--amber-soft)} .reason.green{background:var(--green-soft)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:22px}
+.fact{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px}
+.fact .k{font-size:13px;color:var(--muted)} .fact .v{font-family:var(--cond);font-size:22px;font-weight:600}
+
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+section.card h3{font-family:var(--cond);font-size:21px;margin:0 0 12px}
+.field{margin-bottom:14px}
+.field label,.field .lbl{display:block;font-size:14px;color:var(--muted);margin-bottom:5px}
+.field input[type=text],.field input[type=number],.field input[type=date],.field input[type=month],.field textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.field select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.field textarea{min-height:70px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;padding:10px 6px;cursor:pointer;font-weight:500;font-size:15px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on.ok{background:var(--green);color:#fff}
+.seg button.on.warn{background:var(--amber);color:#1b1b1b}
+.seg button.on.bad{background:var(--red);color:#fff}
+.photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.photos figure{margin:0;position:relative}
+.photos img{width:92px;height:92px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.photos button{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:0;background:var(--red);color:#fff;cursor:pointer;font-size:14px;line-height:1}
+.hint{font-size:13px;color:var(--muted);margin-top:4px}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--asphalt);color:#fff;padding:10px 16px;border-radius:8px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+
+.rep-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.rep-logo{--logo-blue:#1D4F91;--logo-tint:#7A98C6;height:13mm;width:auto;flex:none;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.rep-logo .lb{fill:var(--logo-blue)}
+.rep-logo .lt{fill:var(--logo-tint)}
+.rep-logo .lw{fill:none;stroke:#fff;stroke-width:10;stroke-linejoin:miter}
+.rep-logo .ls{fill:none;stroke:var(--logo-blue);stroke-width:8;stroke-linejoin:miter}
+.paperwrap{overflow-x:auto;padding-bottom:8px}
+.paper{background:#fff;color:#111;min-width:920px;padding:26px 28px;border:1px solid var(--line);border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.paper h1{font-family:var(--cond);font-size:26px;margin:0 0 4px}
+.paper .sub{margin:0 0 16px;color:#333}
+.paper table{width:100%;border-collapse:collapse;font-size:13px}
+.paper th,.paper td{border:1px solid #888;padding:6px 8px;text-align:left;vertical-align:top}
+.paper th{background:#eee;font-family:var(--cond);font-size:14px}
+.paper .sign{margin-top:40px;display:flex;gap:60px}
+.paper .sign div{border-top:1px solid #000;padding-top:4px;min-width:220px;font-size:13px}
+#report{display:none}
+@media print{
+  @page{size:A4 landscape;margin:12mm}
+  body{background:#fff;color:#000;font-size:11pt}
+  :root{padding:0}
+  #app,.fabbar,.toast{display:none!important}
+  #report{display:block}
+  #report h1{font-family:var(--cond);font-size:20pt;margin:0 0 2mm}
+  #report .sub{margin:0 0 5mm;color:#333}
+  #report table{width:100%;border-collapse:collapse;font-size:10pt}
+  #report th,#report td{border:1px solid #888;padding:2mm 2.2mm;text-align:left;vertical-align:top}
+  #report th{background:#eee;font-family:var(--cond);font-size:10.5pt}
+  #report .dot{width:10px;height:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #report .sign{margin-top:12mm;display:flex;gap:30mm}
+  #report .sign div{border-top:1px solid #000;padding-top:1.5mm;min-width:70mm;font-size:9.5pt}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="report"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+const KEY='fuhrpark-check-v1';
+const MONTHS=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+let data={vehicles:[]};
+try{const raw=localStorage.getItem(KEY); if(raw) data=JSON.parse(raw)||data;}catch(e){}
+if(!Array.isArray(data.vehicles)) data.vehicles=[];
+
+const now=new Date();
+let month=ym(now);
+let view={name:'list'};
+
+function ym(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+function addM(m,n){const [y,mo]=m.split('-').map(Number);return ym(new Date(y,mo-1+n,1))}
+function mLabel(m){if(!m)return '–';const [y,mo]=m.split('-').map(Number);return MONTHS[mo-1]+' '+y}
+function mShort(m){if(!m)return '–';const [y,mo]=m.split('-');return mo+'/'+y}
+function dLabel(d){if(!d)return '–';const [y,m,dd]=d.split('-');return dd+'.'+m+'.'+y}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function uid(){return Math.random().toString(36).slice(2,10)}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(data));return true}
+  catch(e){toast('Speicher voll – bitte ein paar Fotos entfernen.');return false}
+}
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),2200)}
+
+/* Reifen-Logik */
+const TIRE={sommer:{name:'Sommer',rec:3},winter:{name:'Winter',rec:4},allwetter:{name:'Allwetter',rec:4}};
+const LEGAL_MM=1.6;
+function parseMM(x){return parseFloat(String(x==null?'':x).replace(',','.'))}
+function fmtMM(n){return n.toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:1})}
+const TIRE_POS=[['vl','Vorne links'],['vr','Vorne rechts'],['hl','Hinten links'],['hr','Hinten rechts']];
+function tireMin(c){
+  let best=null;
+  if(c&&c.tv){TIRE_POS.forEach(([k,l])=>{const n=parseMM(c.tv[k]);if(!isNaN(n)&&(best===null||n<best.n))best={n,label:l.toLowerCase()}})}
+  if(best) return best;
+  const n=parseMM(c&&c.profil); return isNaN(n)?null:{n,label:''};
+}
+function axleInfo(c){
+  if(!c||!c.tv) return null;
+  const g=k=>parseMM(c.tv[k]);
+  const vl=g('vl'),vr=g('vr'),hl=g('hl'),hr=g('hr');
+  if([vl,vr,hl,hr].some(isNaN)) return null;
+  const f=(vl+vr)/2,r=(hl+hr)/2;
+  return {f,r,diff:Math.abs(f-r),worse:f<r?'Vorderachse':'Hinterachse'};
+}
+function tireEval(v,c){
+  if(!c) return {col:'green',text:''};
+  const m=tireMin(c); const rec=(TIRE[v.tire]||{rec:4}).rec;
+  let col='green',text='';
+  if(m){
+    const n=m.n, lab='Reifen'+(m.label?' '+m.label:'')+': '+fmtMM(n)+' mm';
+    if(n<=LEGAL_MM){col='red';text=lab+' – gesetzliche Grenze ('+fmtMM(LEGAL_MM)+' mm) erreicht, sofort wechseln'}
+    else if(n<rec){col='amber';text=lab+' – unter den empfohlenen '+rec+' mm, bald wechseln'}
+    else if(n<=rec+1){col='amber';text=lab+' – Wechselgrenze ('+rec+' mm) bald erreicht'}
+  }else{
+    if(c.reifen==='bad'){col='red';text='Reifen: Mangel'}
+    else if(c.reifen==='warn'){col='amber';text='Reifen: beobachten'}
+  }
+  if(c.reifenSicht==='bad'){col='red';text=(text?text+'; ':'')+'Reifen: Sichtmangel (Riss, Beule oder Schaden)'}
+  else if(c.reifenSicht==='warn'&&col!=='red'){col='amber';text=(text?text+'; ':'')+'Reifen: Sichtprüfung auffällig'}
+  return {col,text};
+}
+function tireLive(v,d){
+  const te=tireEval(v,d); let out='';
+  if(te.text) out+=`<div class="reason ${te.col}"><i class="dot sm ${te.col}"></i> ${esc(te.text)}</div>`;
+  else if(tireMin(d)) out+=`<div class="reason green"><i class="dot sm green"></i> Profil in Ordnung</div>`;
+  const a=axleInfo(d);
+  if(a) out+=`<div class="hint" style="margin-top:6px">Vorderachse Ø ${fmtMM(a.f)} mm · Hinterachse Ø ${fmtMM(a.r)} mm${a.diff>=1.5?' – '+a.worse+' deutlich stärker abgefahren, Luftdruck und Achsvermessung prüfen':''}</div>`;
+  return out;
+}
+function tireCell(v,c){
+  const m=tireMin(c); const art=(TIRE[v.tire]||{}).name;
+  let s=m?fmtMM(m.n)+' mm':(({ok:'In Ordnung',warn:'Beobachten',bad:'Mangel'})[c.reifen]||'–');
+  if(art) s+=' ('+art+')';
+  if(c.tv){const g=k=>{const n=parseMM(c.tv[k]);return isNaN(n)?'–':fmtMM(n)};
+    s+=`<br><span style="font-size:.85em">V ${g('vl')} / ${g('vr')} · H ${g('hl')} / ${g('hr')}</span>`}
+  if(c.reifenSicht==='warn') s+='<br>Sicht: auffällig';
+  if(c.reifenSicht==='bad') s+='<br>Sicht: Mangel';
+  return s;
+}
+
+/* Ampel-Logik */
+function status(v,m){
+  const r=[]; const c=v.checks&&v.checks[m];
+  if(v.tuev){
+    if(v.tuev<m) r.push(['red','TÜV überfällig seit '+mLabel(v.tuev)]);
+    else if(v.tuev===m) r.push(['red','TÜV fällig in diesem Monat']);
+    else if(v.tuev<=addM(m,3)){
+      const [ty,tm]=v.tuev.split('-').map(Number),[my,mm]=m.split('-').map(Number);
+      const diff=(ty-my)*12+(tm-mm);
+      r.push(['amber','TÜV fällig '+(diff===1?'nächsten Monat':'in '+diff+' Monaten')+' ('+mLabel(v.tuev)+') – Termin machen']);
+    }
+  }
+  if(v.kitExpiry){
+    if(v.kitExpiry<m) r.push(['red','Verbandskasten abgelaufen ('+mLabel(v.kitExpiry)+')']);
+    else if(v.kitExpiry<=addM(m,2)) r.push(['amber','Verbandskasten läuft bald ab ('+mLabel(v.kitExpiry)+')']);
+  }
+  if(!c){ r.push(['amber','Noch nicht geprüft in '+mLabel(m)]); }
+  else{
+    const te=tireEval(v,c); if(te.col!=='green') r.push([te.col,te.text]);
+    if(c.sauber==='bad') r.push(['amber','Außen stark verschmutzt']);
+    if(c.schaden==='ja') r.push(['amber','Schaden dokumentiert']);
+    if(c.kit==='fehlt') r.push(['red','Verbandskasten fehlt']);
+    if(c.dreieck==='fehlt') r.push(['red','Warndreieck fehlt']);
+  }
+  const col=r.some(x=>x[0]==='red')?'red':r.length?'amber':'green';
+  if(col==='green') r.push(['green','Geprüft am '+dLabel(c.date)+' – alles in Ordnung']);
+  return {col,reasons:r};
+}
+
+/* Rendering */
+function plate(t,big){return `<span class="plate${big?' big':''}"><span class="eu">D</span><span class="txt">${esc(t||'—')}</span></span>`}
+
+function render(){
+  const app=document.getElementById('app');
+  if(view.name==='list') app.innerHTML=listView();
+  else if(view.name==='detail') app.innerHTML=detailView();
+  else if(view.name==='vehicle') app.innerHTML=vehicleForm();
+  else if(view.name==='preview') app.innerHTML=previewView();
+  window.scrollTo(0,0);
+}
+
+function header(){
+  const counts={green:0,amber:0,red:0};
+  data.vehicles.forEach(v=>counts[status(v,month).col]++);
+  return `<header class="top"><div class="top-inner">
+    <h1>Fuhrpark-Check</h1>
+    <div class="monthbar">
+      <button data-act="prev" aria-label="Vorheriger Monat">‹</button>
+      <div class="m">${mLabel(month)}</div>
+      <button data-act="next" aria-label="Nächster Monat">›</button>
+    </div>
+    ${data.vehicles.length?`<div class="tally">
+      <span><i class="dot sm green"></i>${counts.green} in Ordnung</span>
+      <span><i class="dot sm amber"></i>${counts.amber} zu prüfen</span>
+      <span><i class="dot sm red"></i>${counts.red} Handlungsbedarf</span>
+    </div>`:''}
+  </div></header>`;
+}
+
+function listView(){
+  const vs=[...data.vehicles].sort((a,b)=>{
+    const o={red:0,amber:1,green:2};return o[status(a,month).col]-o[status(b,month).col]||(a.plate||'').localeCompare(b.plate||'')});
+  const rows=vs.map(v=>{
+    const s=status(v,month); const c=v.checks&&v.checks[month];
+    return `<button class="row" data-open="${v.id}" aria-label="${esc(v.plate)} öffnen">
+      <i class="dot ${s.col}" aria-hidden="true"></i>
+      <div>${plate(v.plate)} <div class="name" style="margin-top:6px">${esc(v.name||'')}</div>
+        <div class="meta">${esc(s.reasons[0][1])}</div></div>
+      <div class="meta" style="text-align:right">TÜV<br><b style="color:var(--ink)">${mShort(v.tuev)}</b>${c&&c.km?`<br>${Number(c.km).toLocaleString('de-DE')} km`:''}</div>
+    </button>`}).join('');
+  return header()+`<main>
+    ${vs.length?`<div class="list">${rows}</div>`:`<div class="empty">
+      <p>Noch keine Fahrzeuge angelegt.</p>
+      <div class="actions" style="justify-content:center">
+        <button class="btn" data-act="add">Fahrzeug anlegen</button>
+        <button class="btn ghost" data-act="demo">Beispieldaten laden</button>
+      </div></div>`}
+  </main>
+  <div class="fabbar"><div class="inner">
+    <button class="btn ghost" data-act="preview"${vs.length?'':' disabled'}>Monatsübersicht</button>
+    <button class="btn" data-act="add">Fahrzeug anlegen</button>
+  </div></div>`;
+}
+
+function seg(name,val,opts){
+  return `<div class="seg" role="group">${opts.map(([v,l,k])=>`<button type="button" data-seg="${name}" data-val="${v}" class="${val===v?'on '+k:''}" aria-pressed="${val===v}">${l}</button>`).join('')}</div>`;
+}
+
+let draft=null;
+function detailView(){
+  const v=data.vehicles.find(x=>x.id===view.id); if(!v){view={name:'list'};return listView()}
+  const s=status(v,month);
+  if(!draft||draft._vid!==v.id||draft._m!==month){
+    const c=(v.checks&&v.checks[month])||{};
+    draft=Object.assign({date:new Date().toISOString().slice(0,10),km:'',tv:{vl:'',vr:'',hl:'',hr:''},reifenSicht:'',sauber:'',schaden:'',schadenNotiz:'',fotos:[],kit:'',kitExpiry:v.kitExpiry||'',dreieck:'',notiz:''},JSON.parse(JSON.stringify(c)));
+    draft._vid=v.id;draft._m=month;
+  }
+  const d=draft;
+  const lastKm=lastKmBefore(v,month);
+  return header()+`<main>
+    <button class="back" data-act="back">‹ Zur Übersicht</button>
+    <div class="dhead">${plate(v.plate,true)}<h2>${esc(v.name||'')}</h2></div>
+    <div class="reasons">${s.reasons.map(([c,t])=>`<div class="reason ${c}"><i class="dot sm ${c}"></i> ${esc(t)}</div>`).join('')}</div>
+    <div class="facts">
+      <div class="fact"><div class="k">TÜV fällig</div><div class="v">${mShort(v.tuev)}</div></div>
+      <div class="fact"><div class="k">Verbandskasten bis</div><div class="v">${mShort(v.kitExpiry)}</div></div>
+      <div class="fact"><div class="k">Reifenart</div><div class="v">${esc((TIRE[v.tire]||{}).name||'–')}</div></div>
+      <div class="fact"><div class="k">Letzter km-Stand</div><div class="v">${lastKm?Number(lastKm).toLocaleString('de-DE'):'–'}</div></div>
+    </div>
+
+    ${fixCard(v)}
+    <section class="card"><h3>Prüfung ${mLabel(month)}</h3>
+      <div class="two">
+        <div class="field"><label for="f-date">Geprüft am</label><input type="date" id="f-date" data-f="date" value="${esc(d.date)}"></div>
+        <div class="field"><label for="f-km">Kilometerstand</label><input type="number" inputmode="numeric" id="f-km" data-f="km" value="${esc(d.km)}" placeholder="${lastKm?'zuletzt '+lastKm:''}"></div>
+      </div>
+      <div class="field"><span class="lbl">Profiltiefe in mm je Reifen</span>
+        <div class="two">${TIRE_POS.map(([k,l])=>`<div><label for="f-tv-${k}" style="font-size:13px">${l}</label><input type="text" inputmode="decimal" id="f-tv-${k}" data-tv="${k}" value="${esc(String((d.tv&&d.tv[k])??'').replace('.',','))}" placeholder="z. B. 6,5"></div>`).join('')}</div>
+        <div class="hint">${(TIRE[v.tire]||{}).name?esc(TIRE[v.tire].name)+'reifen: Wechsel empfohlen unter '+TIRE[v.tire].rec+' mm':'Reifenart fehlt – in den Fahrzeugdaten eintragen (bis dahin gelten 4 mm)'} · gesetzlich mindestens 1,6 mm</div>
+        <div id="tire-live" style="margin-top:6px">${tireLive(v,d)}</div></div>
+      <div class="field"><span class="lbl">Reifen optisch (Risse, Beulen, Fremdkörper)</span>${seg('reifenSicht',d.reifenSicht,[['ok','In Ordnung','ok'],['warn','Auffällig','warn'],['bad','Mangel','bad']])}</div>
+      <div class="field"><span class="lbl">Sauberkeit außen</span>${seg('sauber',d.sauber,[['ok','Sauber','ok'],['warn','Geht so','warn'],['bad','Stark verschmutzt','bad']])}</div>
+      <div class="field"><span class="lbl">Schäden</span>${seg('schaden',d.schaden,[['nein','Keine','ok'],['ja','Schaden vorhanden','bad']])}
+        ${d.schaden==='ja'?`<div style="margin-top:10px"><textarea data-f="schadenNotiz" placeholder="Was und wo? z. B. Kratzer hinten links" aria-label="Schadensbeschreibung">${esc(d.schadenNotiz)}</textarea>
+        <label class="btn ghost" style="display:inline-block;margin-top:8px">Foto aufnehmen
+          <input type="file" accept="image/*" capture="environment" multiple data-act="photo" hidden></label>
+        <div class="photos">${(d.fotos||[]).map((f,i)=>`<figure><img src="${f}" alt="Schadensfoto ${i+1}"><button type="button" data-delphoto="${i}" aria-label="Foto löschen">×</button></figure>`).join('')}</div></div>`:''}
+      </div>
+      <div class="field"><span class="lbl">Verbandskasten</span>${seg('kit',d.kit,[['ok','Vorhanden','ok'],['fehlt','Fehlt','bad']])}
+        <div style="margin-top:10px"><label for="f-kit">Ablaufdatum Verbandskasten</label><input type="month" id="f-kit" data-f="kitExpiry" value="${esc(d.kitExpiry)}"></div></div>
+      <div class="field"><span class="lbl">Warndreieck</span>${seg('dreieck',d.dreieck,[['ok','Vorhanden','ok'],['fehlt','Fehlt','bad']])}</div>
+      <div class="field"><label for="f-notiz">Bemerkung</label><textarea id="f-notiz" data-f="notiz">${esc(d.notiz)}</textarea></div>
+      <button class="btn block" data-act="savecheck">Prüfung speichern</button>
+      ${v.checks&&v.checks[month]?`<button class="btn ghost block" style="margin-top:8px" data-act="delcheck">Prüfung für ${mLabel(month)} zurücksetzen</button>`:''}
+    </section>
+    <div class="actions"><button class="btn ghost" data-act="edit">Fahrzeugdaten bearbeiten</button></div>
+  </main>`;
+}
+
+const FIXABLE={
+  reifen:{bad:v=>v==='bad'||v==='warn',label:v=>v==='bad'?'Reifen: Mangel':'Reifen: beobachten',ok:'ok',def:'Reifen erneuert'},
+  sauber:{bad:v=>v==='bad',label:()=>'Außen stark verschmutzt',ok:'ok',def:'Fahrzeug gewaschen'},
+  schaden:{bad:v=>v==='ja',label:()=>'Schaden vorhanden',ok:'nein',def:'Schaden repariert'},
+  kit:{bad:v=>v==='fehlt',label:()=>'Verbandskasten fehlt',ok:'ok',def:'Verbandskasten ersetzt'},
+  dreieck:{bad:v=>v==='fehlt',label:()=>'Warndreieck fehlt',ok:'ok',def:'Warndreieck ersetzt'}
+};
+function fixCard(v){
+  const c=v.checks&&v.checks[month]; if(!c) return '';
+  const open=Object.keys(FIXABLE).filter(k=>k==='reifen'?tireEval(v,c).col!=='green':FIXABLE[k].bad(c[k]));
+  const done=c.fixes||[];
+  if(!open.length&&!done.length) return '';
+  return `<section class="card"><h3>Mängel</h3>
+    ${open.map(k=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+      <span><i class="dot sm ${k==='reifen'?tireEval(v,c).col:(c[k]==='warn'?'amber':'red')}"></i> ${esc(k==='reifen'?tireEval(v,c).text:FIXABLE[k].label(c[k]))}</span>
+      <button class="btn" data-fix="${k}">Behoben</button></div>`).join('')}
+    ${done.map(f=>`<div class="reason green" style="margin-top:6px"><i class="dot sm green"></i> Behoben am ${dLabel(f.date)}: ${esc(f.text)}</div>`).join('')}
+  </section>`;
+}
+function fixText(c){return (c&&c.fixes||[]).map(f=>'Behoben '+dLabel(f.date)+': '+f.text).join('; ')}
+
+function lastKmBefore(v,m){
+  const ks=Object.keys(v.checks||{}).filter(k=>k<=m&&v.checks[k].km).sort();
+  return ks.length?v.checks[ks[ks.length-1]].km:'';
+}
+
+function vehicleForm(){
+  const v=view.id?data.vehicles.find(x=>x.id===view.id):{plate:'',name:'',tuev:'',kitExpiry:'',tire:'sommer'};
+  return header()+`<main>
+    <button class="back" data-act="${view.id?'backdetail':'back'}">‹ Zurück</button>
+    <section class="card"><h3>${view.id?'Fahrzeug bearbeiten':'Neues Fahrzeug'}</h3>
+      <div class="field"><label for="v-plate">Kennzeichen</label><input type="text" id="v-plate" value="${esc(v.plate)}" placeholder="MIL-AB 123" autocapitalize="characters"></div>
+      <div class="field"><label for="v-name">Bezeichnung</label><input type="text" id="v-name" value="${esc(v.name)}" placeholder="z. B. VW Caddy Hausmeister"></div>
+      <div class="field"><label for="v-tire">Reifenart (nur beim Reifenwechsel ändern)</label>
+        <select id="v-tire">${Object.keys(TIRE).map(k=>`<option value="${k}"${v.tire===k?' selected':''}>${TIRE[k].name}</option>`).join('')}</select></div>
+      <div class="two">
+        <div class="field"><label for="v-tuev">TÜV fällig</label><input type="month" id="v-tuev" value="${esc(v.tuev)}"></div>
+        <div class="field"><label for="v-kit">Verbandskasten bis</label><input type="month" id="v-kit" value="${esc(v.kitExpiry)}"></div>
+      </div>
+      <button class="btn block" data-act="savevehicle">Fahrzeug speichern</button>
+      ${view.id?`<button class="btn danger block" style="margin-top:10px" data-act="delvehicle">Fahrzeug löschen</button>`:''}
+    </section></main>`;
+}
+
+const LOGO_SVG='<svg class="rep-logo" viewBox="0 0 322 80" role="img" aria-label="Clean Service" xmlns="http://www.w3.org/2000/svg">'+
+ '<rect class="lb" x="0" y="0" width="110" height="80" rx="9"/>'+
+ '<path class="lw" d="M50 23H28Q21 23 21 30V50Q21 57 28 57H50"/>'+
+ '<path class="lw" d="M89 23H68Q62 23 62 29V33Q62 40 68 40H83Q89 40 89 46V51Q89 57 83 57H62"/>'+
+ '<path class="ls" d="M153 6H133Q127 6 127 12V30Q127 36 133 36H153"/>'+
+ '<path class="ls" d="M168 2V36H198"/>'+
+ '<path class="ls" d="M235 6H209V36H235M209 21H231"/>'+
+ '<path class="lb" fill-rule="evenodd" d="M246 40L259 2H267L280 40H271.5L268.6 31H257.4L254.5 40ZM259.8 23H265.2L262.5 13Z"/>'+
+ '<path class="lb" d="M287 40V2H295L313 28V2H321V40H313L295 14V40Z"/>'+
+ '<text class="lt" x="123" y="59" textLength="198" lengthAdjust="spacing" font-size="15" font-family="Georgia,Times New Roman,serif">SERVICE</text>'+
+ '</svg>';
+function reportHTML(){
+  const vs=[...data.vehicles].sort((a,b)=>(a.plate||'').localeCompare(b.plate||''));
+  const t={ok:'In Ordnung',warn:'Beobachten',bad:'Mangel','':'–'};
+  const sb={ok:'Sauber',warn:'Geht so',bad:'Verschmutzt','':'–'};
+  const rows=vs.map(v=>{
+    const c=(v.checks&&v.checks[month])||null; const s=status(v,month);
+    const note=s.col==='green'?'':s.reasons.filter(r=>r[0]!=='green').map(r=>r[1]).join('; ');
+    return `<tr><td><b>${esc(v.plate)}</b><br>${esc(v.name||'')}</td>
+      <td>${c?dLabel(c.date):'nicht geprüft'}</td>
+      <td>${c&&c.km?Number(c.km).toLocaleString('de-DE'):'–'}</td>
+      <td>${c?tireCell(v,c):'–'}</td>
+      <td>${c?sb[c.sauber||'']:'–'}</td>
+      <td>${c?(c.schaden==='ja'?'Ja: '+esc(c.schadenNotiz||''):c.schaden==='nein'?'Keine':'–'):'–'}</td>
+      <td>${c?(c.kit==='fehlt'?'Fehlt':c.kit==='ok'?'Vorhanden':'–'):'–'}<br>bis ${mShort(v.kitExpiry)}</td>
+      <td>${c?(c.dreieck==='fehlt'?'Fehlt':c.dreieck==='ok'?'Vorhanden':'–'):'–'}</td>
+      <td>${mShort(v.tuev)}</td>
+      <td><i class="dot ${s.col}"></i> ${esc(note||'In Ordnung')}${fixText(c)?'<br>'+esc(fixText(c)):''}${c&&c.notiz?'<br><i>'+esc(c.notiz)+'</i>':''}</td></tr>`}).join('');
+  return `<div class="rep-head"><div><h1>Fuhrpark-Check ${mLabel(month)}</h1>
+    <p class="sub">${vs.length} Fahrzeuge · erstellt am ${dLabel(new Date().toISOString().slice(0,10))}</p></div>
+    ${LOGO_SVG}</div>
+    <table><thead><tr><th>Fahrzeug</th><th>Geprüft am</th><th>km-Stand</th><th>Reifen</th><th>Sauberkeit</th><th>Schäden</th><th>Verbandskasten</th><th>Warndreieck</th><th>TÜV</th><th>Status / Hinweise</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <div class="sign"><div>Geprüft von (Datum, Unterschrift)</div><div>Gesehen (Datum, Unterschrift)</div></div>`;
+}
+function renderReport(){document.getElementById('report').innerHTML=reportHTML()}
+function previewView(){
+  return header()+`<main style="max-width:1100px">
+    <button class="back" data-act="back">‹ Zur Übersicht</button>
+    <p class="hint" style="margin:0 0 10px">So sieht der Ausdruck aus (A4 quer). Auf dem Handy seitlich wischen.</p>
+    <div class="paperwrap"><div class="paper">${reportHTML()}</div></div>
+  </main>
+  <div class="fabbar"><div class="inner">
+    <button class="btn ghost" data-act="back">Zurück</button>
+    <button class="btn" data-act="printnow">Jetzt drucken</button>
+  </div></div>`;
+}
+
+/* Fotos verkleinern */
+function shrink(file){return new Promise((res,rej)=>{
+  const img=new Image(); const url=URL.createObjectURL(file);
+  img.onload=()=>{const max=900;let {width:w,height:h}=img;const k=Math.min(1,max/Math.max(w,h));
+    const cv=document.createElement('canvas');cv.width=Math.round(w*k);cv.height=Math.round(h*k);
+    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);URL.revokeObjectURL(url);res(cv.toDataURL('image/jpeg',0.6))};
+  img.onerror=rej; img.src=url;})}
+
+function demo(){
+  const m=month,p=addM(m,-1);
+  const mk=(plate,name,tuev,kit,check)=>{const v={id:uid(),plate,name,tuev,kitExpiry:kit,checks:{}};if(check)v.checks[check.m]=check.c;return v};
+  data.vehicles=[
+    mk('MIL-FH 101','VW Caddy',addM(m,9),addM(m,20),{m,c:{date:m+'-05',km:84210,tv:{vl:'7.5',vr:'7.5',hl:'8',hr:'8'},reifenSicht:'ok',sauber:'ok',schaden:'nein',kit:'ok',dreieck:'ok',fotos:[]}}),
+    mk('MIL-FH 102','Ford Transit',addM(m,1),addM(m,14),{m:p,c:{date:p+'-04',km:131540,tv:{vl:'5.5',vr:'5.8',hl:'6',hr:'6'},reifenSicht:'ok',sauber:'warn',schaden:'nein',kit:'ok',dreieck:'ok',fotos:[]}}),
+    mk('MIL-FH 103','Opel Combo',addM(m,-1),addM(m,6),{m,c:{date:m+'-05',km:56990,tv:{vl:'3.4',vr:'3.8',hl:'5.5',hr:'5.7'},reifenSicht:'ok',sauber:'ok',schaden:'nein',kit:'ok',dreieck:'ok',fotos:[]}}),
+    mk('MIL-FH 104','VW Crafter',addM(m,15),addM(m,1),null),
+    mk('MIL-FH 105','Škoda Octavia',addM(m,5),addM(m,30),{m,c:{date:m+'-06',km:42117,tv:{vl:'6',vr:'6',hl:'7',hr:'7'},reifenSicht:'ok',sauber:'ok',schaden:'ja',schadenNotiz:'Kratzer Stoßstange hinten links',kit:'ok',dreieck:'ok',fotos:[]}})
+  ];
+  ['allwetter','winter','sommer','winter','sommer'].forEach((t,i)=>{data.vehicles[i].tire=t});
+  save();render();toast('Beispieldaten geladen');
+}
+
+/* Events */
+document.addEventListener('click',async e=>{
+  const segb=e.target.closest('[data-seg]');
+  if(segb){draft[segb.dataset.seg]=segb.dataset.val;render();return}
+  const dp=e.target.closest('[data-delphoto]');
+  if(dp){draft.fotos.splice(+dp.dataset.delphoto,1);render();return}
+  const fx=e.target.closest('[data-fix]');
+  if(fx){
+    const k=fx.dataset.fix; const v=data.vehicles.find(x=>x.id===view.id); const c=v.checks[month];
+    if(k==='reifen'){
+      const w=prompt('Welche Reifen wurden erneuert?\n1 = alle vier\n2 = Vorderachse\n3 = Hinterachse','1'); if(w===null)return;
+      const keys=w.trim()==='2'?['vl','vr']:w.trim()==='3'?['hl','hr']:['vl','vr','hl','hr'];
+      const scope=keys.length===4?'alle vier Reifen':(keys[0]==='vl'?'Vorderachse':'Hinterachse');
+      const mm=prompt('Neue Profiltiefe in mm (z. B. 8):','8'); if(mm===null)return;
+      const n=parseMM(mm); if(isNaN(n)){toast('Bitte eine Zahl eintragen.');return}
+      const old=c.tv||{vl:c.profil||'',vr:c.profil||'',hl:c.profil||'',hr:c.profil||''};
+      c.tv={...old}; keys.forEach(k2=>{c.tv[k2]=String(n)}); delete c.profil;
+      c.reifenSicht='ok'; c.reifen='ok';
+      (c.fixes=c.fixes||[]).push({field:'reifen',date:new Date().toISOString().slice(0,10),text:'Reifen erneuert ('+scope+'), neue Profiltiefe '+fmtMM(n)+' mm'});
+      save();draft=null;render();toast('Als behoben gespeichert');return;
+    }
+    const def=(k==='schaden'&&c.schadenNotiz)?'Repariert: '+c.schadenNotiz:FIXABLE[k].def;
+    const text=prompt('Was wurde gemacht?',def); if(text===null)return;
+    c[k]=FIXABLE[k].ok; if(k==='schaden'){c.schadenNotiz='';}
+    (c.fixes=c.fixes||[]).push({field:k,date:new Date().toISOString().slice(0,10),text:text.trim()||FIXABLE[k].def});
+    save();draft=null;render();toast('Als behoben gespeichert');return;
+  }
+  const op=e.target.closest('[data-open]');
+  if(op){view={name:'detail',id:op.dataset.open};draft=null;render();return}
+  const a=e.target.closest('[data-act]'); if(!a||a.dataset.act==='photo')return;
+  const act=a.dataset.act;
+  if(act==='prev'||act==='next'){month=addM(month,act==='prev'?-1:1);draft=null;render()}
+  else if(act==='back'){view={name:'list'};draft=null;render()}
+  else if(act==='backdetail'){view={name:'detail',id:view.id};render()}
+  else if(act==='add'){view={name:'vehicle'};render()}
+  else if(act==='edit'){view={name:'vehicle',id:view.id};render()}
+  else if(act==='demo'){demo()}
+  else if(act==='preview'){view={name:'preview'};render()}
+  else if(act==='printnow'){renderReport();window.print()}
+  else if(act==='savevehicle'){
+    const plateV=document.getElementById('v-plate').value.trim().toUpperCase();
+    if(!plateV){toast('Bitte ein Kennzeichen eintragen.');return}
+    const vals={plate:plateV,name:document.getElementById('v-name').value.trim(),tuev:document.getElementById('v-tuev').value,kitExpiry:document.getElementById('v-kit').value,tire:document.getElementById('v-tire').value};
+    if(view.id){Object.assign(data.vehicles.find(x=>x.id===view.id),vals);save();view={name:'detail',id:view.id};draft=null}
+    else{const v={id:uid(),checks:{},...vals};data.vehicles.push(v);save();view={name:'list'}}
+    render();toast('Fahrzeug gespeichert');
+  }
+  else if(act==='delvehicle'){
+    if(!confirm('Fahrzeug mit allen Prüfungen löschen?'))return;
+    data.vehicles=data.vehicles.filter(x=>x.id!==view.id);save();view={name:'list'};render();toast('Fahrzeug gelöscht');
+  }
+  else if(act==='savecheck'){
+    const v=data.vehicles.find(x=>x.id===view.id);
+    const missing=['reifenSicht','sauber','schaden','kit','dreieck'].filter(k=>!draft[k]);
+    const tvOk=TIRE_POS.every(([k])=>!isNaN(parseMM(draft.tv&&draft.tv[k])));
+    if(missing.length||!tvOk){toast('Bitte alle Punkte ausfüllen, auch die Profiltiefe aller vier Reifen.');return}
+    const c={...draft};c.tv={};TIRE_POS.forEach(([k])=>{c.tv[k]=String(parseMM(draft.tv[k]))});delete c.profil;delete c.reifen;delete c._vid;delete c._m;
+    v.checks=v.checks||{};v.checks[month]=c;if(draft.kitExpiry)v.kitExpiry=draft.kitExpiry;
+    if(save()){draft=null;render();toast('Prüfung gespeichert')}
+  }
+  else if(act==='delcheck'){
+    if(!confirm('Prüfung für diesen Monat zurücksetzen?'))return;
+    const v=data.vehicles.find(x=>x.id===view.id);delete v.checks[month];save();draft=null;render();
+  }
+});
+document.addEventListener('input',e=>{
+  const ds=e.target.dataset||{}; if(!draft) return;
+  if(ds.tv){draft.tv=draft.tv||{};draft.tv[ds.tv]=e.target.value;
+    const el=document.getElementById('tire-live');const v=data.vehicles.find(x=>x.id===view.id);if(el&&v)el.innerHTML=tireLive(v,draft);return}
+  if(ds.f) draft[ds.f]=e.target.value;
+});
+document.addEventListener('change',async e=>{
+  if(e.target.dataset&&e.target.dataset.act==='photo'){
+    for(const file of e.target.files){try{draft.fotos.push(await shrink(file))}catch(err){toast('Foto konnte nicht gelesen werden.')}}
+    render();
+  }
+});
+
+render();
+})();
+</script>
+</body>
+</html>
