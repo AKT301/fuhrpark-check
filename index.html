@@ -168,6 +168,7 @@ const now=new Date();
 let month=ym(now);
 let view={name:'list'};
 let pendingBackup=false;
+const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 
 function ym(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function addM(m,n){const [y,mo]=m.split('-').map(Number);return ym(new Date(y,mo-1+n,1))}
@@ -337,7 +338,7 @@ function listView(){
         <button class="btn" data-act="add">Fahrzeug anlegen</button>
         <button class="btn ghost" data-act="demo">Beispieldaten laden</button>
       </div></div>`}
-    <div class="footlinks"><button data-act="backup">Datensicherung</button></div>
+    <div class="footlinks">${vs.length?'<button data-act="protoall">Prüfprotokolle (Papier)</button> · ':''}<button data-act="backup">Datensicherung</button></div>
   </main>
   <div class="fabbar"><div class="inner">
     <button class="btn ghost" data-act="preview"${vs.length?'':' disabled'}>Monatsübersicht</button>
@@ -396,7 +397,7 @@ function detailView(){
       <button class="btn block" data-act="savecheck">Prüfung speichern</button>
       ${v.checks&&v.checks[month]?`<button class="btn ghost block" style="margin-top:8px" data-act="delcheck">Prüfung für ${mLabel(month)} zurücksetzen</button>`:''}
     </section>
-    <div class="actions"><button class="btn ghost" data-act="edit">Fahrzeugdaten bearbeiten</button></div>
+    <div class="actions"><button class="btn ghost" data-act="edit">Fahrzeugdaten bearbeiten</button><button class="btn ghost" data-act="proto">Prüfprotokoll drucken (Papier)</button></div>
   </main>`;
 }
 
@@ -598,8 +599,9 @@ function makePdf(jpegs){
   obj(1,()=>push('<< /Type /Catalog /Pages 2 0 R >>'));
   obj(2,()=>push('<< /Type /Pages /Kids ['+jpegs.map((_,i)=>(3+3*i)+' 0 R').join(' ')+'] /Count '+n+' >>'));
   jpegs.forEach((j,i)=>{
-    const pid=3+3*i,cid=4+3*i,iid=5+3*i,cs='q 841.89 0 0 595.28 0 0 cm /Im0 Do Q';
-    obj(pid,()=>push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 841.89 595.28] /Resources << /XObject << /Im0 '+iid+' 0 R >> >> /Contents '+cid+' 0 R >>'));
+    const pw=j.w>j.h?841.89:595.28,ph=j.w>j.h?595.28:841.89;
+    const pid=3+3*i,cid=4+3*i,iid=5+3*i,cs='q '+pw+' 0 0 '+ph+' 0 0 cm /Im0 Do Q';
+    obj(pid,()=>push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+pw+' '+ph+'] /Resources << /XObject << /Im0 '+iid+' 0 R >> >> /Contents '+cid+' 0 R >>'));
     obj(cid,()=>push('<< /Length '+cs.length+' >>\nstream\n'+cs+'\nendstream'));
     obj(iid,()=>{push('<< /Type /XObject /Subtype /Image /Width '+j.w+' /Height '+j.h+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+j.data.length+' >>\nstream\n');push(j.data);push('\nendstream')});
   });
@@ -623,6 +625,117 @@ async function pdfShare(){
   }catch(err){
     if(err&&err.name==='AbortError')return;
     toast('PDF konnte nicht erstellt werden.');
+  }
+}
+
+/* Prüfprotokoll in Papierform (A4 hoch, ein Blatt pro Fahrzeug) */
+async function buildProtocol(list){
+  const S=6,W=210*S,H=297*S,M=14*S,CW=W-2*M;
+  const FONT='"Helvetica Neue",Helvetica,Arial,sans-serif';
+  const LW=Math.max(2,S/3);
+  let logo=null;
+  try{
+    const css='.lb{fill:#1D4F91}.lt{fill:#7A98C6}.lw{fill:none;stroke:#fff;stroke-width:10;stroke-linejoin:miter}.ls{fill:none;stroke:#1D4F91;stroke-width:8;stroke-linejoin:miter}';
+    const svg=LOGO_SVG.replace('<svg ','<svg width="322" height="80" ').replace('>','><style>'+css+'</style>');
+    logo=await loadImg('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg));
+  }catch(e){}
+  const jpegs=[];
+  for(const v of list){
+    const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+    const g=cv.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,W,H);g.textBaseline='alphabetic';
+    const txt=(t,x,y,size,bold,col)=>{g.fillStyle=col||'#000';g.font=(bold?'bold ':'')+Math.round(size*S)+'px '+FONT;g.fillText(t,x,y);return g.measureText(t).width};
+    const line=(x1,y1,x2,y2,col)=>{g.strokeStyle=col||'#000';g.lineWidth=LW;g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke()};
+    const box=(x,y,w,h)=>{g.strokeStyle='#000';g.lineWidth=LW;g.strokeRect(x,y,w,h)};
+    const tick=(x,y)=>{const b=4.2*S;g.strokeStyle='#000';g.lineWidth=LW*1.4;g.strokeRect(x,y-b+0.6*S,b,b);return b};
+    const section=(t,y)=>{g.fillStyle='#EEF1F4';g.fillRect(M,y,CW,6.8*S);txt(t,M+2.5*S,y+4.9*S,3.8,true);return y+6.8*S};
+    const options=(label,opts,y,sub)=>{
+      txt(label,M+2.5*S,y,3.7,true);
+      if(sub)txt(sub,M+2.5*S,y+4.3*S,2.9,false,'#666');
+      let x=M+52*S;
+      opts.forEach(o=>{const b=tick(x,y);const w=txt(o,x+b+2*S,y,3.7,false);x+=b+w+9*S});
+      const ly=y+(sub?6.2:3.4)*S;line(M,ly,M+CW,ly,'#DDD');
+      return ly+6.4*S;
+    };
+    let y=M+8*S;
+    txt('Prüfprotokoll Fahrzeug',M,y,7,true);
+    txt('Monatliche Fahrzeugprüfung · bitte ausfüllen und zurückgeben',M,y+7*S,3.4,false,'#444');
+    if(logo)g.drawImage(logo,W-M-46*S,y-8*S,46*S,11.4*S);
+    y+=12*S;
+
+    // Fahrzeugdaten
+    y=section('Fahrzeug',y)+7.5*S;
+    txt(v.plate||'—',M+2.5*S,y,6,true);
+    txt(v.name||'',M+62*S,y-0.4*S,4.2,false);
+    y+=7.5*S;
+    const tn=(TIRE[v.tire]||{}).name;
+    const lastKm=lastKmBefore(v,month);
+    const infos=[['TÜV fällig',mShort(v.tuev)],['Verbandskasten bis',mShort(v.kitExpiry)],['Reifenart',tn||'–'],['Letzter km-Stand',lastKm?Number(lastKm).toLocaleString('de-DE'):'–']];
+    infos.forEach(([k,val],i)=>{const x=M+2.5*S+i*(CW/4);txt(k,x,y,3.1,false,'#555');txt(val,x,y+5.2*S,4,true)});
+    y+=11*S;
+
+    // Prüfung
+    y=section('Prüfung',y)+8.5*S;
+    txt('Geprüft am',M+2.5*S,y,3.7,true);line(M+28*S,y+1*S,M+80*S,y+1*S);
+    txt('Geprüft von',M+92*S,y,3.7,true);line(M+118*S,y+1*S,M+CW,y+1*S);
+    y+=11*S;
+    txt('Kilometerstand',M+2.5*S,y,3.7,true);
+    box(M+52*S,y-6.5*S,62*S,9.5*S);txt('km',M+116*S,y,3.7,false);
+    y+=7*S;
+
+    // Reifen
+    y=section('Reifen – Profiltiefe in mm je Reifen',y)+3.5*S;
+    const cellW=(CW-2*S)/2,cellH=11.5*S;
+    TIRE_POS.forEach(([k,l],i)=>{
+      const x=M+(i%2)*(cellW+2*S),yy=y+Math.floor(i/2)*(cellH+2*S);
+      box(x,yy,cellW,cellH);txt(l,x+2.5*S,yy+5*S,3.3,false,'#555');txt('mm',x+cellW-11*S,yy+9.2*S,3.7,false);
+    });
+    y+=2*cellH+2*S+4.5*S;
+    txt('Gesetzlich mindestens 1,6 mm'+(tn?' · '+tn+'reifen: Wechsel empfohlen unter '+TIRE[v.tire].rec+' mm':''),M+2.5*S,y,3.1,false,'#555');
+    y+=8*S;
+    y=options('Reifen optisch',['In Ordnung','Auffällig','Mangel'],y,'(Risse, Beulen, Fremdkörper)');
+    y-=2*S;
+
+    // Zustand & Ausstattung
+    y=section('Zustand & Ausstattung – bitte ankreuzen',y)+7.5*S;
+    y=options('Sauberkeit außen',['Sauber','Geht so','Stark verschmutzt'],y);
+    y=options('Schäden',['Keine','Schaden vorhanden'],y);
+    txt('Falls Schaden: was und wo?',M+2.5*S,y-1*S,3.3,false,'#444');
+    y+=7*S;line(M+2.5*S,y,M+CW,y,'#888');y+=7.5*S;line(M+2.5*S,y,M+CW,y,'#888');y+=9*S;
+    txt('Verbandskasten',M+2.5*S,y,3.7,true);
+    [['Vorhanden'],['Fehlt']].reduce((x,[o])=>{const b=tick(x,y);const w=txt(o,x+b+2*S,y,3.7,false);return x+b+w+9*S},M+52*S);
+    txt('Ablauf (MM/JJJJ):',M+112*S,y,3.3,false,'#444');line(M+141*S,y+1*S,M+CW,y+1*S);
+    line(M,y+3.4*S,M+CW,y+3.4*S,'#DDD');y+=9.8*S;
+    y=options('Warndreieck',['Vorhanden','Fehlt'],y);
+
+    // Bemerkung & Unterschrift
+    y=section('Bemerkung',y-1*S)+9*S;
+    for(let i=0;i<2;i++){line(M+2.5*S,y,M+CW,y,'#888');y+=8*S}
+    const sy=H-M-10*S;
+    line(M,sy,M+75*S,sy);txt('Datum, Unterschrift Prüfer',M,sy+4.5*S,3.1,false,'#444');
+    line(M+CW-75*S,sy,M+CW,sy);txt('Übertragen in App (Datum, Kürzel)',M+CW-75*S,sy+4.5*S,3.1,false,'#444');
+    g.textAlign='right';txt('Fuhrpark-Check · '+(v.plate||''),W-M,H-M+3*S,2.8,false,'#777');g.textAlign='left';
+    const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.9));
+    jpegs.push({data:new Uint8Array(await blob.arrayBuffer()),w:W,h:H});
+  }
+  return makePdf(jpegs);
+}
+async function protocolShare(list,name){
+  if(!list.length){toast('Keine Fahrzeuge angelegt.');return}
+  const win=isIOS?null:window.open('','_blank');
+  toast('Prüfprotokoll wird erstellt …');
+  try{
+    const blob=await buildProtocol(list);
+    const file=new File([blob],name+'.pdf',{type:'application/pdf'});
+    if(isIOS&&navigator.canShare&&navigator.share&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:name});
+    }else{
+      const url=URL.createObjectURL(blob);
+      if(win)win.location.href=url;else if(!window.open(url,'_blank'))location.href=url;
+    }
+  }catch(err){
+    if(win)win.close();
+    if(err&&err.name==='AbortError')return;
+    toast('Prüfprotokoll konnte nicht erstellt werden.');
   }
 }
 
@@ -700,6 +813,8 @@ document.addEventListener('click',async e=>{
   else if(act==='backup'){view={name:'backup'};render()}
   else if(act==='export'){const ok=await doExport();if(ok!==false){toast('Sicherung wurde gespeichert');if(view.name==='backup')render()}}
   else if(act==='demo'){demo()}
+  else if(act==='proto'){const v=data.vehicles.find(x=>x.id===view.id);if(v)protocolShare([v],'Pruefprotokoll-'+(v.plate||'Fahrzeug').replace(/\s+/g,'-'))}
+  else if(act==='protoall'){protocolShare([...data.vehicles].sort((a,b)=>(a.plate||'').localeCompare(b.plate||'')),'Pruefprotokolle-'+month)}
   else if(act==='preview'){view={name:'preview'};render()}
   else if(act==='printnow'){if(isStandalone()){pdfShare();return}renderReport();pendingBackup=true;setTimeout(()=>window.print(),250)}
   else if(act==='savevehicle'){
@@ -751,7 +866,6 @@ document.addEventListener('change',async e=>{
   }
 });
 
-const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 window.addEventListener('beforeprint',()=>{
   renderReport();
   if(!isIOS&&!document.getElementById('pagesize')){const st=document.createElement('style');st.id='pagesize';st.textContent='@page{size:A4 landscape;margin:12mm}';document.head.appendChild(st)}
