@@ -279,7 +279,7 @@ function status(v,m){
   if(!c){ r.push(['amber','Noch nicht geprüft in '+mLabel(m)]); }
   else{
     const te=tireEval(v,c); if(te.col!=='green') r.push([te.col,te.text]);
-    if(c.sauber==='bad') r.push(['amber','Außen stark verschmutzt']);
+    if(c.sauber==='bad') r.push(['amber','Stark verschmutzt']);
     if(c.schaden==='ja') r.push(['amber','Schaden dokumentiert']);
     if(c.kit==='fehlt') r.push(['red','Verbandskasten fehlt']);
     if(c.dreieck==='fehlt') r.push(['red','Warndreieck fehlt']);
@@ -383,7 +383,7 @@ function detailView(){
         <div class="hint">${(TIRE[v.tire]||{}).name?esc(TIRE[v.tire].name)+'reifen: Wechsel empfohlen unter '+TIRE[v.tire].rec+' mm':'Reifenart fehlt – in den Fahrzeugdaten eintragen (bis dahin gelten 4 mm)'} · gesetzlich mindestens 1,6 mm</div>
         <div id="tire-live" style="margin-top:6px">${tireLive(v,d)}</div></div>
       <div class="field"><span class="lbl">Reifen optisch (Risse, Beulen, Fremdkörper)</span>${seg('reifenSicht',d.reifenSicht,[['ok','In Ordnung','ok'],['warn','Auffällig','warn'],['bad','Mangel','bad']])}</div>
-      <div class="field"><span class="lbl">Sauberkeit außen</span>${seg('sauber',d.sauber,[['ok','Sauber','ok'],['warn','Geht so','warn'],['bad','Stark verschmutzt','bad']])}</div>
+      <div class="field"><span class="lbl">Sauberkeit (innen und außen)</span>${seg('sauber',d.sauber,[['ok','Sauber','ok'],['warn','Geht so','warn'],['bad','Stark verschmutzt','bad']])}</div>
       <div class="field"><span class="lbl">Schäden</span>${seg('schaden',d.schaden,[['nein','Keine','ok'],['ja','Schaden vorhanden','bad']])}
         ${d.schaden==='ja'?`<div style="margin-top:10px"><textarea data-f="schadenNotiz" placeholder="Was und wo? z. B. Kratzer hinten links" aria-label="Schadensbeschreibung">${esc(d.schadenNotiz)}</textarea>
         <label class="btn ghost" style="display:inline-block;margin-top:8px">Foto aufnehmen
@@ -403,7 +403,7 @@ function detailView(){
 
 const FIXABLE={
   reifen:{bad:v=>v==='bad'||v==='warn',label:v=>v==='bad'?'Reifen: Mangel':'Reifen: beobachten',ok:'ok',def:'Reifen erneuert'},
-  sauber:{bad:v=>v==='bad',label:()=>'Außen stark verschmutzt',ok:'ok',def:'Fahrzeug gewaschen'},
+  sauber:{bad:v=>v==='bad',label:()=>'Stark verschmutzt',ok:'ok',def:'Fahrzeug gereinigt'},
   schaden:{bad:v=>v==='ja',label:()=>'Schaden vorhanden',ok:'nein',def:'Schaden repariert'},
   kit:{bad:v=>v==='fehlt',label:()=>'Verbandskasten fehlt',ok:'ok',def:'Verbandskasten ersetzt'},
   dreieck:{bad:v=>v==='fehlt',label:()=>'Warndreieck fehlt',ok:'ok',def:'Warndreieck ersetzt'}
@@ -697,7 +697,8 @@ async function buildProtocol(list){
 
     // Zustand & Ausstattung
     y=section('Zustand & Ausstattung – bitte ankreuzen',y)+7.5*S;
-    y=options('Sauberkeit außen',['Sauber','Geht so','Stark verschmutzt'],y);
+    y=options('Sauberkeit',['Sauber','Geht so','Stark verschmutzt'],y,'(innen und außen)');
+    y+=1*S;
     y=options('Schäden',['Keine','Schaden vorhanden'],y);
     txt('Falls Schaden: was und wo?',M+2.5*S,y-1*S,3.3,false,'#444');
     y+=7*S;line(M+2.5*S,y,M+CW,y,'#888');y+=7.5*S;line(M+2.5*S,y,M+CW,y,'#888');y+=9*S;
